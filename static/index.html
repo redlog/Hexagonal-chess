@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glinski's Hexagonal Chess</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 12px;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 8px; color: #a0c4ff; }
+  #main {
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  #board-container { position: relative; }
+  svg#board { display: block; }
+  .hex-cell { cursor: pointer; transition: filter 0.1s; }
+  .hex-cell:hover { filter: brightness(1.3); }
+  .hex-bg { stroke: #333; stroke-width: 0.8; }
+  .hex-piece {
+    font-size: 22px;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+    user-select: none;
+  }
+  .hex-label {
+    font-size: 7px;
+    fill: #666;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+  }
+
+  #sidebar {
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .panel {
+    background: #16213e;
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #0f3460;
+  }
+  .panel h3 { font-size: 0.85rem; color: #a0c4ff; margin-bottom: 8px; }
+
+  #setup-form label { display: block; font-size: 0.8rem; margin-bottom: 4px; }
+  #setup-form select, #setup-form input[type=range] {
+    width: 100%; margin-bottom: 8px;
+    background: #0f3460; border: 1px solid #1a4a80;
+    color: #e0e0e0; border-radius: 4px; padding: 4px;
+  }
+  #depth-val { font-size: 0.8rem; color: #a0c4ff; }
+  #btn-new {
+    width: 100%; padding: 8px;
+    background: #0f3460; border: 1px solid #1a4a80;
+    color: #a0c4ff; border-radius: 6px; cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #btn-new:hover { background: #1a4a80; }
+
+  #status-text {
+    font-size: 0.9rem; line-height: 1.5;
+    min-height: 40px;
+  }
+  .status-check { color: #ff6b6b; font-weight: bold; }
+  .status-over { color: #ffd700; font-weight: bold; }
+  .status-thinking { color: #90e0ef; font-style: italic; }
+
+  #info-text {
+    font-size: 0.8rem; color: #aaa; line-height: 1.5; min-height: 48px;
+  }
+  .info-error { color: #ff6b6b; }
+  .info-ok { color: #90ee90; }
+
+  #promo-panel { display: none; }
+  #promo-panel h3 { color: #ffd700; }
+  .promo-btn {
+    display: inline-block; font-size: 28px; cursor: pointer;
+    padding: 4px 8px; border-radius: 4px; transition: background 0.15s;
+  }
+  .promo-btn:hover { background: #1a4a80; }
+
+  #move-list {
+    font-size: 0.75rem; color: #ccc; max-height: 200px;
+    overflow-y: auto; line-height: 1.8;
+  }
+  .move-pair { display: flex; gap: 8px; }
+  .move-num { color: #666; min-width: 24px; }
+  .move-white { color: #f0f0f0; }
+  .move-black { color: #aaa; }
+</style>
+</head>
+<body>
+<h1>Glinski's Hexagonal Chess</h1>
+<div id="main">
+  <div id="board-container">
+    <svg id="board"></svg>
+  </div>
+
+  <div id="sidebar">
+    <!-- Setup -->
+    <div class="panel" id="setup-panel">
+      <h3>New Game</h3>
+      <div id="setup-form">
+        <label>Play as</label>
+        <select id="sel-color">
+          <option value="white">White (moves first)</option>
+          <option value="black">Black</option>
+        </select>
+        <label>AI depth: <span id="depth-val">3</span></label>
+        <input type="range" id="sel-depth" min="2" max="4" value="3">
+        <button id="btn-new">Start / Restart</button>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="panel">
+      <h3>Status</h3>
+      <div id="status-text">Loading…</div>
+    </div>
+
+    <!-- Info / reason -->
+    <div class="panel">
+      <h3>Info</h3>
+      <div id="info-text">Click a piece to select it.</div>
+    </div>
+
+    <!-- Promotion chooser -->
+    <div class="panel" id="promo-panel">
+      <h3>Promote Pawn To:</h3>
+      <div id="promo-choices"></div>
+    </div>
+
+    <!-- Move list -->
+    <div class="panel">
+      <h3>Move History</h3>
+      <div id="move-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Constants ───────────────────────────────────────────────────────────────
+const HEX_SIZE = 30;       // center-to-corner distance
+const BOARD_PAD = 40;
+const sqrt3 = Math.sqrt(3);
+
+// Flat-top hex: x = HEX_SIZE * 1.5 * q,  y = HEX_SIZE * sqrt3 * (r + q/2)
+// Screen: flip y (higher r = higher on board = lower screen y)
+function hexCenter(q, r) {
+  const x = HEX_SIZE * 1.5 * q;
+  const y = -HEX_SIZE * sqrt3 * (r + q / 2);
+  return { x, y };
+}
+
+// Corners of a flat-top hex at (cx, cy)
+function hexCorners(cx, cy, size) {
+  const pts = [];
+  for (let i = 0; i < 6; i++) {
+    const ang = (Math.PI / 180) * (60 * i);
+    pts.push([cx + size * Math.cos(ang), cy + size * Math.sin(ang)]);
+  }
+  return pts;
+}
+
+const COLORS = ['#E8D8A8', '#8FAF70', '#C8A060'];  // light, medium, dark
+const SEL_COLOR    = '#4488FF';
+const VALID_COLOR  = '#44CC44';
+const LAST_COLOR   = '#FFCC44';
+
+const UNICODE = {
+  'white': { king:'♔', queen:'♕', rook:'♖', bishop:'♗', knight:'♘', pawn:'♙' },
+  'black': { king:'♚', queen:'♛', rook:'♜', bishop:'♝', knight:'♞', pawn:'♟' },
+};
+
+const PROMO_PIECES = ['queen','rook','bishop','knight'];
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let cellColors = {};    // notation → 0|1|2
+let gameState  = null;  // from server
+let selected   = null;  // notation of selected cell
+let validMoves = [];    // array of destination notations
+let lastMove   = null;  // {from, to}
+let pendingPromo = null;// {from, to} awaiting promotion choice
+let moveHistory  = [];  // [{white, black}]
+let currentMoveWhite = null;
+let playerColor = 'white';
+let thinking = false;
+
+// ─── SVG helpers ─────────────────────────────────────────────────────────────
+const svgNS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs) {
+  const el = document.createElementNS(svgNS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+// ─── Board initialisation ────────────────────────────────────────────────────
+async function initBoard() {
+  const resp = await fetch('/api/cells');
+  cellColors = await resp.json();
+
+  // Compute bounding box
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const cell of Object.keys(cellColors)) {
+    const [q, r] = cellToAxial(cell);
+    const { x, y } = hexCenter(q, r);
+    minX = Math.min(minX, x - HEX_SIZE);
+    maxX = Math.max(maxX, x + HEX_SIZE);
+    minY = Math.min(minY, y - HEX_SIZE * sqrt3 / 2);
+    maxY = Math.max(maxY, y + HEX_SIZE * sqrt3 / 2);
+  }
+  const W = maxX - minX + BOARD_PAD * 2;
+  const H = maxY - minY + BOARD_PAD * 2;
+  const offX = -minX + BOARD_PAD;
+  const offY = -minY + BOARD_PAD;
+
+  const svg = document.getElementById('board');
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  // Draw cells
+  for (const [cell, colorIdx] of Object.entries(cellColors)) {
+    const [q, r] = cellToAxial(cell);
+    const { x, y } = hexCenter(q, r);
+    const cx = x + offX, cy = y + offY;
+    const corners = hexCorners(cx, cy, HEX_SIZE - 0.5);
+    const pts = corners.map(([px,py]) => `${px},${py}`).join(' ');
+
+    const g = svgEl('g', { class: 'hex-cell', 'data-cell': cell });
+
+    const poly = svgEl('polygon', {
+      class: 'hex-bg',
+      points: pts,
+      fill: COLORS[colorIdx],
+      'data-base-color': COLORS[colorIdx],
+    });
+    g.appendChild(poly);
+
+    // Small label
+    const lbl = svgEl('text', {
+      class: 'hex-label',
+      x: cx, y: cy + HEX_SIZE * 0.62,
+      fill: '#555',
+    });
+    lbl.textContent = cell;
+    g.appendChild(lbl);
+
+    // Piece text placeholder
+    const pt = svgEl('text', {
+      class: 'hex-piece',
+      x: cx, y: cy,
+      fill: '#111',
+    });
+    g.appendChild(pt);
+
+    g.addEventListener('click', () => onCellClick(cell));
+    svg.appendChild(g);
+  }
+
+  // Store offsets for later
+  svg._offX = offX;
+  svg._offY = offY;
+}
+
+// ─── Rendering ───────────────────────────────────────────────────────────────
+function renderBoard() {
+  if (!gameState) return;
+  const pieces = gameState.pieces || {};
+  const svg = document.getElementById('board');
+
+  for (const g of svg.querySelectorAll('.hex-cell')) {
+    const cell = g.dataset.cell;
+    const poly = g.querySelector('.hex-bg');
+    const pieceEl = g.querySelector('.hex-piece');
+
+    // Color
+    let bg = COLORS[cellColors[cell]];
+    if (lastMove && (cell === lastMove.from || cell === lastMove.to)) bg = LAST_COLOR;
+    if (validMoves.includes(cell)) bg = VALID_COLOR;
+    if (cell === selected) bg = SEL_COLOR;
+    poly.setAttribute('fill', bg);
+
+    // Piece
+    const p = pieces[cell];
+    if (p) {
+      const sym = UNICODE[p.color]?.[p.piece] || '?';
+      pieceEl.textContent = sym;
+      pieceEl.setAttribute('fill', p.color === 'white' ? '#fafafa' : '#111');
+      pieceEl.setAttribute('stroke', p.color === 'white' ? '#333' : '#ddd');
+      pieceEl.setAttribute('stroke-width', '0.5');
+      pieceEl.setAttribute('paint-order', 'stroke');
+    } else {
+      pieceEl.textContent = '';
+    }
+  }
+}
+
+function setStatus() {
+  if (!gameState) return;
+  const el = document.getElementById('status-text');
+  if (gameState.game_over) {
+    let msg = '';
+    if (gameState.winner === 'white') msg = '♔ White wins';
+    else if (gameState.winner === 'black') msg = '♚ Black wins';
+    else msg = 'Draw';
+    if (gameState.result_reason) msg += ` (${gameState.result_reason})`;
+    el.innerHTML = `<span class="status-over">${msg}</span>`;
+  } else if (thinking) {
+    el.innerHTML = `<span class="status-thinking">AI is thinking…</span>`;
+  } else {
+    const whose = gameState.turn === gameState.player_color ? 'Your turn' : "AI's turn";
+    let msg = `${whose} (${capitalize(gameState.turn)})`;
+    if (gameState.in_check) msg += ' — <span class="status-check">CHECK!</span>';
+    el.innerHTML = msg;
+  }
+}
+
+function setInfo(msg, type='') {
+  const el = document.getElementById('info-text');
+  el.className = type ? `info-${type}` : '';
+  el.textContent = msg;
+}
+
+// ─── Click handling ───────────────────────────────────────────────────────────
+async function onCellClick(cell) {
+  if (!gameState || gameState.game_over || thinking) return;
+  if (gameState.turn !== gameState.player_color) return;
+
+  if (pendingPromo) return;  // waiting for promotion choice
+
+  // If clicking the already-selected cell: deselect
+  if (cell === selected) {
+    selected = null;
+    validMoves = [];
+    setInfo('Deselected.');
+    renderBoard();
+    return;
+  }
+
+  const piece = gameState.pieces[cell];
+
+  // If we have a selection and click a destination
+  if (selected !== null) {
+    if (validMoves.includes(cell)) {
+      // Check if promotion needed
+      const needsPromo = await checkNeedsPromotion(selected, cell);
+      if (needsPromo) {
+        pendingPromo = { from: selected, to: cell };
+        showPromoChooser();
+        return;
+      }
+      await submitMove(selected, cell, null);
+      return;
+    } else {
+      // Click on own piece → switch selection
+      if (piece && piece.color === gameState.player_color) {
+        await selectCell(cell);
+        return;
+      }
+      // Click on invalid destination → show reason
+      const reason = await fetchIllegalReason(selected, cell);
+      setInfo(reason || 'Illegal move.', 'error');
+      return;
+    }
+  }
+
+  // Nothing selected yet
+  if (!piece) {
+    setInfo('No piece on that cell.', 'error');
+    return;
+  }
+  if (piece.color !== gameState.player_color) {
+    setInfo("That is your opponent's piece.", 'error');
+    return;
+  }
+  await selectCell(cell);
+}
+
+async function selectCell(cell) {
+  selected = cell;
+  const resp = await fetch('/api/select', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({cell}),
+  });
+  const data = await resp.json();
+  validMoves = data.valid_moves || [];
+  if (validMoves.length === 0) {
+    setInfo(data.reason || 'No legal moves for this piece.', 'error');
+  } else {
+    setInfo(`${validMoves.length} legal move(s) available. Click a green cell.`, 'ok');
+  }
+  renderBoard();
+}
+
+async function checkNeedsPromotion(from, to) {
+  const resp = await fetch('/api/select', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({cell: from}),
+  });
+  const data = await resp.json();
+  return !!data.requires_promotion && data.valid_moves.includes(to);
+}
+
+async function fetchIllegalReason(from, to) {
+  const resp = await fetch('/api/check_move', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({from_cell: from, to_cell: to}),
+  });
+  const data = await resp.json();
+  return data.reason || 'Illegal move.';
+}
+
+async function submitMove(from, to, promotion) {
+  selected = null;
+  validMoves = [];
+  thinking = true;
+  setStatus();
+
+  const resp = await fetch('/api/move', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({from_cell: from, to_cell: to, promotion}),
+  });
+  const data = await resp.json();
+  thinking = false;
+
+  if (!data.success) {
+    setInfo(data.reason || 'Illegal move.', 'error');
+    // refresh state
+    gameState = data;
+    renderBoard();
+    setStatus();
+    return;
+  }
+
+  lastMove = {from, to};
+  gameState = data;
+
+  // Record move in history
+  const moveStr = promotion ? `${from}-${to}=${promotion[0].toUpperCase()}` : `${from}-${to}`;
+  if (gameState.player_color === 'white' || currentMoveWhite === null) {
+    if (from && gameState.player_color !== 'black') {
+      currentMoveWhite = moveStr;
+    }
+  }
+  recordMove(moveStr, gameState.player_color === 'white' ? 'white' : 'black');
+
+  if (data.ai_move) {
+    lastMove = {from: data.ai_move.from, to: data.ai_move.to};
+    const aiStr = data.ai_move.promotion
+      ? `${data.ai_move.from}-${data.ai_move.to}=${data.ai_move.promotion[0].toUpperCase()}`
+      : `${data.ai_move.from}-${data.ai_move.to}`;
+    recordMove(aiStr, gameState.player_color === 'white' ? 'black' : 'white');
+  }
+
+  setInfo('Move made.', 'ok');
+  renderBoard();
+  setStatus();
+
+  if (gameState.game_over) {
+    setInfo('Game over! Start a new game above.', 'ok');
+  }
+}
+
+function showPromoChooser() {
+  const panel = document.getElementById('promo-panel');
+  const choices = document.getElementById('promo-choices');
+  panel.style.display = 'block';
+  choices.innerHTML = '';
+  const color = gameState.player_color;
+  for (const piece of PROMO_PIECES) {
+    const span = document.createElement('span');
+    span.className = 'promo-btn';
+    span.textContent = UNICODE[color][piece];
+    span.title = capitalize(piece);
+    span.onclick = async () => {
+      panel.style.display = 'none';
+      const { from, to } = pendingPromo;
+      pendingPromo = null;
+      await submitMove(from, to, piece);
+    };
+    choices.appendChild(span);
+  }
+}
+
+// ─── Move history ─────────────────────────────────────────────────────────────
+function recordMove(notation, color) {
+  const list = document.getElementById('move-list');
+  if (color === 'white' || (gameState.player_color === 'black' && color === 'black')) {
+    // Start new move pair
+    currentMoveWhite = notation;
+    const div = document.createElement('div');
+    div.className = 'move-pair';
+    div.innerHTML = `<span class="move-num">${gameState.fullmove}.</span>
+      <span class="move-white" id="mw-${gameState.fullmove}">${notation}</span>
+      <span class="move-black" id="mb-${gameState.fullmove}"></span>`;
+    list.appendChild(div);
+  } else {
+    const mb = document.getElementById(`mb-${gameState.fullmove - (gameState.turn === 'white' ? 0 : 1)}`);
+    if (mb) mb.textContent = notation;
+  }
+  list.scrollTop = list.scrollHeight;
+}
+
+// ─── New game ─────────────────────────────────────────────────────────────────
+async function startNewGame() {
+  const color = document.getElementById('sel-color').value;
+  const depth = parseInt(document.getElementById('sel-depth').value);
+  playerColor = color;
+  selected = null;
+  validMoves = [];
+  lastMove = null;
+  pendingPromo = null;
+  moveHistory = [];
+  currentMoveWhite = null;
+  document.getElementById('move-list').innerHTML = '';
+  document.getElementById('promo-panel').style.display = 'none';
+  setInfo('Game started. Click a piece to select it.', 'ok');
+
+  thinking = true;
+  setStatus();
+
+  const resp = await fetch('/api/new_game', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({player_color: color, depth}),
+  });
+  gameState = await resp.json();
+  thinking = false;
+  renderBoard();
+  setStatus();
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+const FILES = ['a','b','c','d','e','f','g','h','i','k','l'];
+
+function cellToAxial(notation) {
+  const file = notation[0];
+  const rank = parseInt(notation.slice(1));
+  const q = FILES.indexOf(file) - 5;
+  const r = rank - 6 - Math.min(0, q);
+  return [q, r];
+}
+
+function capitalize(s) {
+  return s ? s[0].toUpperCase() + s.slice(1) : '';
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+document.getElementById('sel-depth').addEventListener('input', function() {
+  document.getElementById('depth-val').textContent = this.value;
+});
+document.getElementById('btn-new').addEventListener('click', startNewGame);
+
+(async () => {
+  await initBoard();
+  // Load existing state
+  const resp = await fetch('/api/state');
+  gameState = await resp.json();
+  renderBoard();
+  setStatus();
+  setInfo('Choose a color and click "Start / Restart" to begin.');
+})();
+</script>
+</body>
+</html>
