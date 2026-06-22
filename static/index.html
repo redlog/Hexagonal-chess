@@ -31,7 +31,7 @@
   .hex-cell:hover { filter: brightness(1.3); }
   .hex-bg { stroke: #333; stroke-width: 0.8; }
   .hex-piece {
-    font-size: 22px;
+    font-size: 28px;
     text-anchor: middle;
     dominant-baseline: central;
     pointer-events: none;
@@ -185,7 +185,7 @@ const VALID_COLOR  = '#44CC44';
 const LAST_COLOR   = '#FFCC44';
 
 const UNICODE = {
-  'white': { king:'♔', queen:'♕', rook:'♖', bishop:'♗', knight:'♘', pawn:'♙' },
+  'white': { king:'♚', queen:'♛', rook:'♜', bishop:'♝', knight:'♞', pawn:'♟' },
   'black': { king:'♚', queen:'♛', rook:'♜', bishop:'♝', knight:'♞', pawn:'♟' },
 };
 
@@ -303,9 +303,9 @@ function renderBoard() {
     if (p) {
       const sym = UNICODE[p.color]?.[p.piece] || '?';
       pieceEl.textContent = sym;
-      pieceEl.setAttribute('fill', p.color === 'white' ? '#fafafa' : '#111');
-      pieceEl.setAttribute('stroke', p.color === 'white' ? '#333' : '#ddd');
-      pieceEl.setAttribute('stroke-width', '0.5');
+      pieceEl.setAttribute('fill', p.color === 'white' ? '#fff' : '#222');
+      pieceEl.setAttribute('stroke', p.color === 'white' ? '#222' : '#ccc');
+      pieceEl.setAttribute('stroke-width', '1');
       pieceEl.setAttribute('paint-order', 'stroke');
     } else {
       pieceEl.textContent = '';
