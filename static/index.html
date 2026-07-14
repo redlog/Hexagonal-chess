@@ -84,7 +84,7 @@
   .info-error { color: #ff6b6b; }
   .info-ok { color: #90ee90; }
 
-  #depth-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+  #depth-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; margin-bottom: 8px; }
   #depth-row label { color: #a0c4ff; white-space: nowrap; }
   #depth-row input[type=range] {
     flex: 1; min-width: 0;
@@ -187,11 +187,6 @@
     <div class="panel" id="hud">
       <div id="status-text">Loading…</div>
       <div id="info-text">Open the menu to start a game.</div>
-      <div id="depth-row">
-        <label for="sel-depth">AI depth</label>
-        <input type="range" id="sel-depth" min="2" max="4" value="3">
-        <span id="depth-val">3</span>
-      </div>
     </div>
 
     <!-- Drawer: New Game + Move History (hamburger on mobile) -->
@@ -209,6 +204,11 @@
             <option value="white">White (moves first)</option>
             <option value="black">Black</option>
           </select>
+          <div id="depth-row">
+            <label for="sel-depth">AI depth</label>
+            <input type="range" id="sel-depth" min="2" max="4" value="3">
+            <span id="depth-val">3</span>
+          </div>
           <button id="btn-new">Start / Restart</button>
         </div>
       </div>
