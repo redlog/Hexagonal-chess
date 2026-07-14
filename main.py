@@ -51,9 +51,20 @@ def new_game(req: NewGameRequest):
     return result
 
 
+class DepthRequest(BaseModel):
+    depth: int
+
+
 @app.get("/api/state")
 def get_state():
     return _state.to_dict()
+
+
+@app.post("/api/set_depth")
+def set_depth(req: DepthRequest):
+    """Adjust the AI search depth for the current game."""
+    _state.depth = max(2, min(4, req.depth))
+    return {"depth": _state.depth}
 
 
 @app.post("/api/select")

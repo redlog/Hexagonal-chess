@@ -16,14 +16,29 @@
     min-height: 100vh;
     padding: 12px;
   }
-  h1 { font-size: 1.4rem; margin-bottom: 8px; color: #a0c4ff; }
+  h1 { font-size: 1.4rem; color: #a0c4ff; }
+
+  #topbar {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; max-width: 920px; margin-bottom: 8px;
+  }
+  #topbar h1 { flex: 1; margin: 0; }
+  #menu-toggle {
+    display: none;
+    background: #0f3460; color: #a0c4ff;
+    border: 1px solid #1a4a80; border-radius: 6px;
+    font-size: 1.3rem; line-height: 1; padding: 6px 12px; cursor: pointer;
+  }
+  #menu-toggle:hover { background: #1a4a80; }
+
   #main {
     display: flex;
     flex-direction: row;
     gap: 16px;
     align-items: flex-start;
-    flex-wrap: wrap;
     justify-content: center;
+    width: 100%;
+    max-width: 920px;
   }
   #board-container { position: relative; }
   svg#board { display: block; }
@@ -45,11 +60,9 @@
     pointer-events: none;
   }
 
-  #sidebar {
-    width: 240px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  #rightcol {
+    display: flex; flex-direction: column; gap: 10px;
+    width: 260px; flex-shrink: 0;
   }
   .panel {
     background: #16213e;
@@ -59,42 +72,42 @@
   }
   .panel h3 { font-size: 0.85rem; color: #a0c4ff; margin-bottom: 8px; }
 
-  #setup-form label { display: block; font-size: 0.8rem; margin-bottom: 4px; }
-  #setup-form select, #setup-form input[type=range] {
-    width: 100%; margin-bottom: 8px;
-    background: #0f3460; border: 1px solid #1a4a80;
-    color: #e0e0e0; border-radius: 4px; padding: 4px;
-  }
-  #depth-val { font-size: 0.8rem; color: #a0c4ff; }
-  #btn-new {
-    width: 100%; padding: 8px;
-    background: #0f3460; border: 1px solid #1a4a80;
-    color: #a0c4ff; border-radius: 6px; cursor: pointer;
-    font-size: 0.85rem;
-  }
-  #btn-new:hover { background: #1a4a80; }
-
-  #status-text {
-    font-size: 0.9rem; line-height: 1.5;
-    min-height: 40px;
-  }
+  /* ── HUD: always-visible status / info / difficulty ── */
+  #hud { display: flex; flex-direction: column; gap: 8px; }
+  #status-text { font-size: 0.95rem; line-height: 1.4; font-weight: 600; }
+  #info-text { font-size: 0.8rem; color: #aaa; line-height: 1.4; min-height: 18px; }
   .status-check { color: #ff6b6b; font-weight: bold; }
   .status-over { color: #ffd700; font-weight: bold; }
   .status-thinking { color: #90e0ef; font-style: italic; }
-
-  #info-text {
-    font-size: 0.8rem; color: #aaa; line-height: 1.5; min-height: 48px;
-  }
   .info-error { color: #ff6b6b; }
   .info-ok { color: #90ee90; }
 
-  #promo-panel { display: none; }
-  #promo-panel h3 { color: #ffd700; }
-  .promo-btn {
-    display: inline-block; font-size: 28px; cursor: pointer;
-    padding: 4px 8px; border-radius: 4px; transition: background 0.15s;
+  #depth-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+  #depth-row label { color: #a0c4ff; white-space: nowrap; }
+  #depth-row input[type=range] {
+    flex: 1; min-width: 0;
+    background: #0f3460; border: 1px solid #1a4a80;
+    border-radius: 4px; padding: 2px;
   }
-  .promo-btn:hover { background: #1a4a80; }
+  #depth-val { color: #a0c4ff; min-width: 12px; text-align: center; }
+
+  /* ── Drawer: New Game + Move History ── */
+  #sidebar { display: flex; flex-direction: column; gap: 10px; }
+  #drawer-head { display: none; }
+
+  #setup-form label { display: block; font-size: 0.8rem; margin-bottom: 4px; }
+  #setup-form select {
+    width: 100%; margin-bottom: 8px;
+    background: #0f3460; border: 1px solid #1a4a80;
+    color: #e0e0e0; border-radius: 4px; padding: 6px;
+  }
+  #btn-new {
+    width: 100%; padding: 10px;
+    background: #0f3460; border: 1px solid #1a4a80;
+    color: #a0c4ff; border-radius: 6px; cursor: pointer;
+    font-size: 0.9rem;
+  }
+  #btn-new:hover { background: #1a4a80; }
 
   #move-list {
     font-size: 0.75rem; color: #ccc; max-height: 200px;
@@ -104,56 +117,116 @@
   .move-num { color: #666; min-width: 24px; }
   .move-white { color: #f0f0f0; }
   .move-black { color: #aaa; }
+
+  /* ── Promotion chooser (floating overlay) ── */
+  #promo-panel {
+    display: none; position: fixed; z-index: 60;
+    left: 50%; top: 40%; transform: translate(-50%, -50%);
+    box-shadow: 0 8px 30px rgba(0,0,0,.6);
+    text-align: center;
+  }
+  #promo-panel h3 { color: #ffd700; }
+  .promo-btn {
+    display: inline-block; font-size: 34px; cursor: pointer;
+    padding: 6px 10px; border-radius: 4px; transition: background 0.15s;
+    color: #fff;
+  }
+  .promo-btn:hover { background: #1a4a80; }
+
+  #backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.55); z-index: 40;
+  }
+
+  /* ── Mobile ── */
+  @media (max-width: 720px) {
+    body { padding: 8px; }
+    #menu-toggle { display: block; }
+    #topbar h1 { font-size: 1.15rem; }
+    #main { flex-direction: column; align-items: stretch; gap: 10px; }
+    #board-container { display: flex; justify-content: center; width: 100%; }
+    svg#board { width: 100%; height: auto; max-height: 58vh; }
+    #rightcol { width: 100%; }
+
+    #sidebar {
+      position: fixed; top: 0; right: 0; height: 100%;
+      width: 84%; max-width: 320px;
+      background: #12182f; padding: 14px;
+      transform: translateX(100%); transition: transform .25s ease;
+      z-index: 50; overflow-y: auto;
+      box-shadow: -4px 0 24px rgba(0,0,0,.5);
+    }
+    #sidebar.open { transform: translateX(0); }
+    #drawer-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    #drawer-head span { font-size: 1rem; color: #a0c4ff; font-weight: 600; }
+    #drawer-close {
+      background: none; border: none; color: #a0c4ff;
+      font-size: 1.4rem; cursor: pointer; line-height: 1;
+    }
+    #backdrop.show { display: block; }
+  }
 </style>
 </head>
 <body>
-<h1>Glinski's Hexagonal Chess</h1>
+<div id="topbar">
+  <h1>Glinski's Hexagonal Chess</h1>
+  <button id="menu-toggle" aria-label="Open menu">☰</button>
+</div>
 <div id="main">
   <div id="board-container">
     <svg id="board"></svg>
   </div>
 
-  <div id="sidebar">
-    <!-- Setup -->
-    <div class="panel" id="setup-panel">
-      <h3>New Game</h3>
-      <div id="setup-form">
-        <label>Play as</label>
-        <select id="sel-color">
-          <option value="white">White (moves first)</option>
-          <option value="black">Black</option>
-        </select>
-        <label>AI depth: <span id="depth-val">3</span></label>
+  <div id="rightcol">
+    <!-- Always-visible HUD: status, info, difficulty -->
+    <div class="panel" id="hud">
+      <div id="status-text">Loading…</div>
+      <div id="info-text">Open the menu to start a game.</div>
+      <div id="depth-row">
+        <label for="sel-depth">AI depth</label>
         <input type="range" id="sel-depth" min="2" max="4" value="3">
-        <button id="btn-new">Start / Restart</button>
+        <span id="depth-val">3</span>
       </div>
     </div>
 
-    <!-- Status -->
-    <div class="panel">
-      <h3>Status</h3>
-      <div id="status-text">Loading…</div>
-    </div>
+    <!-- Drawer: New Game + Move History (hamburger on mobile) -->
+    <div id="sidebar">
+      <div id="drawer-head">
+        <span>Menu</span>
+        <button id="drawer-close" aria-label="Close menu">✕</button>
+      </div>
 
-    <!-- Info / reason -->
-    <div class="panel">
-      <h3>Info</h3>
-      <div id="info-text">Click a piece to select it.</div>
-    </div>
+      <div class="panel" id="setup-panel">
+        <h3>New Game</h3>
+        <div id="setup-form">
+          <label>Play as</label>
+          <select id="sel-color">
+            <option value="white">White (moves first)</option>
+            <option value="black">Black</option>
+          </select>
+          <button id="btn-new">Start / Restart</button>
+        </div>
+      </div>
 
-    <!-- Promotion chooser -->
-    <div class="panel" id="promo-panel">
-      <h3>Promote Pawn To:</h3>
-      <div id="promo-choices"></div>
-    </div>
-
-    <!-- Move list -->
-    <div class="panel">
-      <h3>Move History</h3>
-      <div id="move-list"></div>
+      <div class="panel">
+        <h3>Move History</h3>
+        <div id="move-list"></div>
+      </div>
     </div>
   </div>
 </div>
+
+<!-- Promotion chooser (floating overlay) -->
+<div class="panel" id="promo-panel">
+  <h3>Promote Pawn To:</h3>
+  <div id="promo-choices"></div>
+</div>
+
+<!-- Drawer backdrop -->
+<div id="backdrop"></div>
 
 <script>
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -624,6 +697,7 @@ function recordMove(notation, color) {
 async function startNewGame() {
   const color = document.getElementById('sel-color').value;
   const depth = parseInt(document.getElementById('sel-depth').value);
+  closeDrawer();  // reveal the board after starting from the menu
   playerColor = color;
   selected = null;
   validMoves = [];
@@ -664,9 +738,33 @@ function capitalize(s) {
   return s ? s[0].toUpperCase() + s.slice(1) : '';
 }
 
+// ─── Drawer (hamburger menu) ──────────────────────────────────────────────────
+function openDrawer() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('backdrop').classList.add('show');
+}
+function closeDrawer() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('show');
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
+document.getElementById('menu-toggle').addEventListener('click', openDrawer);
+document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+document.getElementById('backdrop').addEventListener('click', closeDrawer);
+
 document.getElementById('sel-depth').addEventListener('input', function() {
   document.getElementById('depth-val').textContent = this.value;
+});
+// Apply a depth change to the in-progress game (not just the next one).
+document.getElementById('sel-depth').addEventListener('change', async function() {
+  try {
+    await fetch('/api/set_depth', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({depth: parseInt(this.value)}),
+    });
+  } catch (e) { /* non-critical: will still apply on next new game */ }
 });
 document.getElementById('btn-new').addEventListener('click', startNewGame);
 
@@ -677,7 +775,7 @@ document.getElementById('btn-new').addEventListener('click', startNewGame);
   gameState = await resp.json();
   renderBoard();
   setStatus();
-  setInfo('Choose a color and click "Start / Restart" to begin.');
+  setInfo('Open the menu (☰) to start a game.');
 })();
 </script>
 </body>
