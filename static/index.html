@@ -111,6 +111,12 @@
   }
   #btn-new:hover { background: #1a4a80; }
 
+  .subhead {
+    font-size: 0.7rem; color: #7f9cc0;
+    text-transform: uppercase; letter-spacing: .05em;
+    margin: 4px 0 6px; padding-top: 8px;
+    border-top: 1px solid #0f3460;
+  }
   #move-list {
     font-size: 0.75rem; color: #ccc; max-height: 200px;
     overflow-y: auto; line-height: 1.8;
@@ -204,17 +210,18 @@
             <option value="white">White (moves first)</option>
             <option value="black">Black</option>
           </select>
-          <div id="depth-row">
-            <label for="sel-depth">AI depth</label>
-            <input type="range" id="sel-depth" min="2" max="4" value="3">
-            <span id="depth-val">3</span>
-          </div>
           <button id="btn-new">Start / Restart</button>
         </div>
       </div>
 
-      <div class="panel">
-        <h3>Move History</h3>
+      <div class="panel" id="current-panel">
+        <h3>Current Game</h3>
+        <div id="depth-row">
+          <label for="sel-depth">AI depth</label>
+          <input type="range" id="sel-depth" min="2" max="4" value="3">
+          <span id="depth-val">3</span>
+        </div>
+        <div class="subhead">Move History</div>
         <div id="move-list"></div>
       </div>
     </div>
