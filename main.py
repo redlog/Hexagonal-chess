@@ -131,6 +131,9 @@ def do_move(req: MoveRequest):
     result = _state.to_dict()
     result["success"] = True
     result["ai_move"] = ai_move_notation
+    # Exact board position after the human's move but before the AI replies,
+    # so the client can render/animate the two moves separately.
+    result["state_after_human"] = state_after_human
     return result
 
 

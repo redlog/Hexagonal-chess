@@ -160,6 +160,7 @@
 const HEX_SIZE = 30;       // center-to-corner distance
 const BOARD_PAD = 40;
 const sqrt3 = Math.sqrt(3);
+const ANIM_MS = 380;       // piece-glide animation duration
 
 // Flat-top hex: x = HEX_SIZE * 1.5 * q,  y = HEX_SIZE * sqrt3 * (r + q/2)
 // Screen: flip y (higher r = higher on board = lower screen y)
@@ -313,6 +314,58 @@ function renderBoard() {
   }
 }
 
+// Screen center (in SVG viewBox coords) of a cell.
+function cellCenter(cell) {
+  const svg = document.getElementById('board');
+  const [q, r] = cellToAxial(cell);
+  const { x, y } = hexCenter(q, r);
+  return { x: x + svg._offX, y: y + svg._offY };
+}
+
+// Glide a piece from one cell to another. Hides the source piece for the
+// duration of the flight; the caller is responsible for updating the board
+// state (so the piece appears at the destination) once this resolves.
+function flyPiece(from, to, color, pieceType) {
+  return new Promise(resolve => {
+    const svg = document.getElementById('board');
+    const a = cellCenter(from), b = cellCenter(to);
+
+    // Hide the piece sitting on the source cell while it "flies".
+    const srcPiece = svg.querySelector(`.hex-cell[data-cell="${from}"] .hex-piece`);
+    if (srcPiece) srcPiece.textContent = '';
+
+    const fl = svgEl('text', {
+      class: 'hex-piece',
+      x: 0, y: 0,
+      fill: color === 'white' ? '#fff' : '#222',
+      stroke: color === 'white' ? '#222' : '#ccc',
+      'stroke-width': '1',
+      'paint-order': 'stroke',
+    });
+    fl.textContent = UNICODE[color]?.[pieceType] || '?';
+    fl.style.transition = 'none';
+    fl.style.transform = `translate(${a.x}px, ${a.y}px)`;
+    svg.appendChild(fl);
+
+    // Force a reflow so the starting transform is committed before we animate.
+    fl.getBoundingClientRect();
+    fl.style.transition = `transform ${ANIM_MS}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
+    requestAnimationFrame(() => {
+      fl.style.transform = `translate(${b.x}px, ${b.y}px)`;
+    });
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      fl.remove();
+      resolve();
+    };
+    fl.addEventListener('transitionend', finish);
+    setTimeout(finish, ANIM_MS + 150);  // fallback if transitionend doesn't fire
+  });
+}
+
 function setStatus() {
   if (!gameState) return;
   const el = document.getElementById('status-text');
@@ -431,43 +484,85 @@ async function fetchIllegalReason(from, to) {
   return data.reason || 'Illegal move.';
 }
 
+// Optimistically apply a move to the local board so the piece can be shown at
+// its destination before the server round-trip completes. The exact position
+// is reconciled from the server response afterwards.
+function applyLocalMove(from, to, promotion) {
+  if (!gameState || !gameState.pieces) return;
+  const p = gameState.pieces[from];
+  if (!p) return;
+  delete gameState.pieces[from];
+  gameState.pieces[to] = promotion ? { color: p.color, piece: promotion } : p;
+}
+
 async function submitMove(from, to, promotion) {
   selected = null;
   validMoves = [];
+  setInfo('');
+  // Lock input immediately. We don't call setStatus() yet, so "AI is thinking…"
+  // won't appear until the player's piece has actually moved.
   thinking = true;
-  setStatus();
 
-  const resp = await fetch('/api/move', {
+  const mover = gameState.pieces[from];
+  const moverColor = mover ? mover.color : gameState.player_color;
+  const moverType  = mover ? mover.piece : 'pawn';
+
+  // Fire the request now so the AI can think while the player's piece glides.
+  const movePromise = fetch('/api/move', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({from_cell: from, to_cell: to, promotion}),
-  });
-  const data = await resp.json();
-  thinking = false;
+  }).then(r => r.json());
+
+  // 1. Move the player's piece right away.
+  await flyPiece(from, to, moverColor, moverType);
+  applyLocalMove(from, to, promotion);
+  lastMove = {from, to};
+  renderBoard();
+
+  // 2. Only now does the AI start "thinking" from the player's perspective.
+  setStatus();
+
+  const data = await movePromise;
 
   if (!data.success) {
+    thinking = false;
     setInfo(data.reason || 'Illegal move.', 'error');
-    // refresh state
-    gameState = data;
+    gameState = data;           // revert to the server's (unchanged) position
+    lastMove = null;
     renderBoard();
     setStatus();
     return;
   }
 
-  lastMove = {from, to};
-  gameState = data;
-
-  // Record move in history
-  const moveStr = promotion ? `${from}-${to}=${promotion[0].toUpperCase()}` : `${from}-${to}`;
-  if (gameState.player_color === 'white' || currentMoveWhite === null) {
-    if (from && gameState.player_color !== 'black') {
-      currentMoveWhite = moveStr;
-    }
+  // Reconcile to the exact position after the human's move (captures,
+  // en passant, promotion that the optimistic render can't fully know).
+  if (data.state_after_human) {
+    gameState = data.state_after_human;
+    lastMove = {from, to};
+    renderBoard();
   }
-  recordMove(moveStr, gameState.player_color === 'white' ? 'white' : 'black');
 
+  // 3. Animate the AI's reply.
   if (data.ai_move) {
-    lastMove = {from: data.ai_move.from, to: data.ai_move.to};
+    const aiFrom = data.ai_move.from, aiTo = data.ai_move.to;
+    const aiPiece = gameState.pieces[aiFrom];
+    const aiColor = aiPiece ? aiPiece.color
+                            : (gameState.player_color === 'white' ? 'black' : 'white');
+    const aiType  = aiPiece ? aiPiece.piece : 'pawn';
+    await flyPiece(aiFrom, aiTo, aiColor, aiType);
+    lastMove = {from: aiFrom, to: aiTo};
+  }
+
+  thinking = false;
+  gameState = data;
+  renderBoard();
+  setStatus();
+
+  // Record moves in history.
+  const moveStr = promotion ? `${from}-${to}=${promotion[0].toUpperCase()}` : `${from}-${to}`;
+  recordMove(moveStr, gameState.player_color === 'white' ? 'white' : 'black');
+  if (data.ai_move) {
     const aiStr = data.ai_move.promotion
       ? `${data.ai_move.from}-${data.ai_move.to}=${data.ai_move.promotion[0].toUpperCase()}`
       : `${data.ai_move.from}-${data.ai_move.to}`;
@@ -475,9 +570,6 @@ async function submitMove(from, to, promotion) {
   }
 
   setInfo('Move made.', 'ok');
-  renderBoard();
-  setStatus();
-
   if (gameState.game_over) {
     setInfo('Game over! Start a new game above.', 'ok');
   }
