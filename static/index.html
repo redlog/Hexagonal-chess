@@ -185,8 +185,13 @@ const SEL_COLOR    = '#4488FF';
 const VALID_COLOR  = '#44CC44';
 const LAST_COLOR   = '#FFCC44';
 
+// Use the proper per-colour glyphs (white = outline, black = filled) rather
+// than colouring one filled glyph via `fill`. iOS Safari renders some filled
+// chess glyphs (notably the pawn ♟, U+265F) as a dark emoji that ignores the
+// SVG fill, which made white pawns appear black. The outline glyphs are light
+// whether drawn as text or emoji, so white pieces read correctly everywhere.
 const UNICODE = {
-  'white': { king:'♚', queen:'♛', rook:'♜', bishop:'♝', knight:'♞', pawn:'♟' },
+  'white': { king:'♔', queen:'♕', rook:'♖', bishop:'♗', knight:'♘', pawn:'♙' },
   'black': { king:'♚', queen:'♛', rook:'♜', bishop:'♝', knight:'♞', pawn:'♟' },
 };
 
